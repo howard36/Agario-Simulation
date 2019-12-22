@@ -2,15 +2,22 @@ import random
 import copy
 import agent
 import math
+import numpy as np
 from graphics import *
 
 random.seed()
-num_agents = 4
+num_agents = 100
 num_food = 100
-num_close_agents = 3
+num_close_agents = 5
 num_close_food = 10
 starting_mass = 10
 turns = 1000
+speed = 1/10
+
+sigma = 10
+input_size = 4 + 3*num_close_agents + 2*num_close_food
+hidden_size = 50
+param_size = (input_size+1)*hidden_size + (hidden_size+1)*2
 
 def dist(v):
     return math.sqrt(v[0]**2 + v[1]**2)
@@ -39,9 +46,9 @@ def printpl(pos_list):
     print(']')
 
 def get_radius(mass):
-    return min((mass-9)/20, 0.2)
+    return min(math.sqrt(mass)/200, 0.1)
 
-def draw():
+def draw(win):
     for i in range(num_food):
         if food_circ[i]:
             food_circ[i].undraw()
@@ -57,18 +64,25 @@ def draw():
         pos_circ[i] = Circle(Point(pos[i][0], pos[i][1]), radius[i])
         pos_circ[i].setFill('green')
         pos_circ[i].draw(win)
+    win.flush()
 
 def new_food(i):
     food[i] = [random.random(), random.random()]
 
 def new_agent(i):
     pos[i] = [random.random(), random.random()]
-    agents[i] = agent.Agent(num_close_agents, num_close_food)
+    params = sigma * np.asarray([np.random.normal() for _ in range(param_size)]) / param_size
+    '''
+    cov = sigma * np.eye(param_size) / param_size
+    print(cov.shape)
+    params = np.random.multivariate_normal(np.zeros(param_size), cov)
+    '''
+    agents[i] = agent.Agent(input_size, hidden_size, params)
     mass[i] = starting_mass
     radius[i] = get_radius(mass[i])
 
 def eat(i, j):
-    print('%d ate %d' % (i, j))
+    #print('%d ate %d' % (i, j))
     mass[i] += mass[j]
     radius[i] = get_radius(mass[i])
     new_agent(j)
@@ -96,16 +110,15 @@ radius = [get_radius(starting_mass)]*num_agents
 pos_circ = [None]*num_agents
 food_circ = [None]*num_food
 
-win = GraphWin(width=600, height=600)
-win.setCoords(0, 0, 1, 1)
-win.setBackground('#eee')
-
 for i in range(num_agents):
     new_agent(i)
 for i in range(num_food):
     new_food(i)
 
-draw()
+win = GraphWin(width=600, height=600, autoflush=False)
+win.setCoords(0, 0, 1, 1)
+win.setBackground('#eee')
+draw(win)
 print(mass, end=' ')
 printpl(pos)
 win.getKey()
@@ -122,14 +135,11 @@ for _ in range(turns):
         food_idx = closest(food, pos[i], num_close_food)
         food_input = [food[j] for j in food_idx]
 
-        move = agents[i].move(pos[i], mass[i], radius[i], agent_input, food_input)
+        move = agents[i].move(pos[i], mass[i], radius[i], agent_input, food_input) * speed
 
         pos[i][0] = min(max(pos[i][0] + move[0], 0), 1)
         pos[i][1] = min(max(pos[i][1] + move[1], 0), 1)
 
         check_eat(i)
-    draw()
-    print(mass, end=' ')
-    printpl(pos)
-    #win.getKey()
+    draw(win)
 
