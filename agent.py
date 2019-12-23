@@ -1,24 +1,41 @@
-import numpy
+import numpy as np
+import math
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
 
 class Agent:
-    def __init__(self, input_agents, input_food):
-        self.input_size = 4 + 3*input_agents + 2*input_food
-        self.hidden_size = 50
+    def __init__(self, input_size, hidden_size, params):
+        self.input_size = input_size
+        self.hidden_size = hidden_size
         self.output_size = 2
-        self.param_size = (self.input_size + 1)*self.hidden_size 
-                        + (self.hidden_size + 1)*self.output_size
-        self.params = 
+        self.param_size = (self.input_size + 1)*self.hidden_size \
+                        + (self.hidden_size+1)*self.output_size
 
-    def move(self, pos, mass, radius, close_agents, close_food):
-        inp = [1] # bias
-        inp += pos
-        inp.append(mass)
-        inp.append(radius)
-        for i in range(len(close_agents)):
-            inp += close_agents[i]
-        for i in range(len(close_food)):
-            inp += close_food[i]
-        assert(len(inp) == self.input_size)
+        assert(params.shape == (self.param_size,))
+        self.params = params
+        self.w1 = self.params[: (self.input_size + 1)*self.hidden_size]
+        self.w1 = np.reshape(self.w1, (self.hidden_size, self.input_size + 1))
+        self.w2 = self.params[(self.input_size + 1)*self.hidden_size :]
+        self.w2 = np.reshape(self.w2, (self.output_size, self.hidden_size + 1))
 
-        return [0.01,0.01]
+    def move(self, inp, show=False):
+        inp.append(1)
+        if not len(inp) == self.input_size+1:
+            print('len(inp) = %d' % len(inp))
+            print('self.input_size + 1 = %d' % (self.input_size+1))
+        assert(len(inp) == self.input_size + 1)
+
+        x = np.asarray(inp)
+        if show:
+            print('input = ', end='')
+            print(x)
+        x = np.matmul(self.w1, x)
+        x = sigmoid(x)
+        x = np.append(x, [1])
+        if show:
+            print('hidden = ', end='')
+            print(x)
+        x = np.matmul(self.w2, x)
+        return x
 

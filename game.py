@@ -6,36 +6,40 @@ import numpy as np
 from graphics import *
 
 random.seed()
-num_agents = 100
-num_food = 100
+num_agents = 50
+num_food = 200
 num_close_agents = 5
-num_close_food = 10
-starting_mass = 10
-turns = 1000
-speed = 1/10
+num_close_food = 5
+num_survive = 10
+starting_mass = 5
+mass_decay = 0.99
+max_speed = 1/100
 
-sigma = 10
-input_size = 4 + 3*num_close_agents + 2*num_close_food
-hidden_size = 50
+gen_time = 500
+num_generations = 1000000
+
+
+sigma = 100
+input_size = 3 + 3*num_close_agents + 2*num_close_food
+hidden_size = 20
 param_size = (input_size+1)*hidden_size + (hidden_size+1)*2
+
+print('Parameter Size: %d' % param_size)
 
 def dist(v):
     return math.sqrt(v[0]**2 + v[1]**2)
+
+def L2(v):
+    return np.sum(np.dot(v, v))
+
+def minus(a, b):
+    return [a[0]-b[0], a[1]-b[1]]
 
 def dist2(a, b):
     return math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2)
 
 def printp(p):
     print('(%d, %d)' % (int(100*p[0]), int(100*p[1])), end='')
-
-def closest(pos_list, p, n):
-    cpy = copy.deepcopy(pos_list)
-    for i in range(len(cpy)):
-        cpy[i][0] -= p[0]
-        cpy[i][1] -= p[1]
-    tmp = [(dist(cpy[i]), i) for i in range(len(cpy))]
-    tmp = sorted(tmp)
-    return [pair[1] for pair in tmp[:n]]
 
 def printpl(pos_list):
     print('[', end='')
@@ -45,8 +49,26 @@ def printpl(pos_list):
             print(', ', end='')
     print(']')
 
-def get_radius(mass):
-    return min(math.sqrt(mass)/200, 0.1)
+
+
+
+def closest_agents(i):
+    tmp = []
+    for j in range(num_agents):
+        if j == i or not alive[j]:
+            continue
+        tmp.append((dist2(pos[j], pos[i]), j))
+    tmp = sorted(tmp)
+    return [pair[1] for pair in tmp[:num_close_agents]]
+
+def closest_food(i):
+    tmp = [(dist2(food[j], pos[i]), j) for j in range(num_food)]
+    tmp = sorted(tmp)
+    return [pair[1] for pair in tmp[:num_close_food]]
+
+def set_mass(i, m):
+    mass[i] = m
+    radius[i] = min(math.sqrt(mass[i])/100, 0.1)
 
 def draw(win):
     for i in range(num_food):
@@ -61,85 +83,162 @@ def draw(win):
     for i in tmp:
         if pos_circ[i]:
             pos_circ[i].undraw()
-        pos_circ[i] = Circle(Point(pos[i][0], pos[i][1]), radius[i])
-        pos_circ[i].setFill('green')
-        pos_circ[i].draw(win)
+        if alive[i]:
+            pos_circ[i] = Circle(Point(pos[i][0], pos[i][1]), radius[i])
+            pos_circ[i].setFill('green')
+            pos_circ[i].draw(win)
     win.flush()
 
 def new_food(i):
     food[i] = [random.random(), random.random()]
 
 def new_agent(i):
-    pos[i] = [random.random(), random.random()]
-    params = sigma * np.asarray([np.random.normal() for _ in range(param_size)]) / param_size
-    '''
-    cov = sigma * np.eye(param_size) / param_size
-    print(cov.shape)
-    params = np.random.multivariate_normal(np.zeros(param_size), cov)
-    '''
+    #if i == 0:
+    #    print("New 0")
+    
+    #print(best)
+    params = best[random.randint(0, len(best)-1)].copy()
+    step = np.asarray([np.random.normal() for _ in range(param_size)]) / param_size
+    params += sigma * step
     agents[i] = agent.Agent(input_size, hidden_size, params)
-    mass[i] = starting_mass
-    radius[i] = get_radius(mass[i])
 
-def eat(i, j):
+    pos[i] = [random.random(), random.random()]
+    set_mass(i, starting_mass)
+    alive[i] = True
+    #print(L2(step), L2(params))
+
+def eat(i, j, t):
+    assert(alive[i])
+    assert(alive[j])
     #print('%d ate %d' % (i, j))
-    mass[i] += mass[j]
-    radius[i] = get_radius(mass[i])
-    new_agent(j)
-    check_eat(i)
+    set_mass(i, mass[i] + mass[j])
+    die(j, t) 
+    check_eat(i, t)
 
-def check_eat(i):
+def die(i, t):
+    assert(alive[i])
+    alive[i] = False
+    #print(fitness)
+    fitness.append((t + mass[i], i))
+
+def check_eat(i, t):
+    assert(alive[i])
     for j in range(num_food):
         if dist2(food[j], pos[i]) < radius[i]:
-            mass[i] += 1
-            radius[i] = get_radius(mass[i])
+            set_mass(i, mass[i]+1)
             new_food(j)
     for j in range(num_agents):
-        if j == i:
+        if j == i or not alive[j]:
             continue
         if mass[i] > mass[j] and dist2(pos[i], pos[j]) < radius[i]:
-            eat(i, j)
+            eat(i, j, t)
         elif mass[j] > mass[i] and dist2(pos[i], pos[j]) < radius[j]:
-            eat(j, i)
+            eat(j, i, t)
 
 agents = [None]*num_agents
 pos = [None]*num_agents
+mass = [None]*num_agents
+radius = [None]*num_agents
+alive = [True]*num_agents
+
 food = [None]*num_food
-mass = [starting_mass]*num_agents
-radius = [get_radius(starting_mass)]*num_agents
 pos_circ = [None]*num_agents
 food_circ = [None]*num_food
 
-for i in range(num_agents):
-    new_agent(i)
-for i in range(num_food):
-    new_food(i)
+best = []
+fitness = []
 
 win = GraphWin(width=600, height=600, autoflush=False)
 win.setCoords(0, 0, 1, 1)
 win.setBackground('#eee')
-draw(win)
-print(mass, end=' ')
-printpl(pos)
-win.getKey()
 
-for _ in range(turns):
+def run_generation():
+    global fitness, best
+
     for i in range(num_agents):
-        agent_idx = closest(pos, pos[i], num_close_agents+1)
-        if agent_idx[0] != i:
-            print('Error: agent_idx is wrong')
-        agent_idx.pop(0)
-        agent_input = []
-        for j in agent_idx:
-            agent_input.append([pos[j][0]-pos[i][0], pos[j][1]-pos[i][1], mass[i]]) 
-        food_idx = closest(food, pos[i], num_close_food)
-        food_input = [food[j] for j in food_idx]
+        new_agent(i)
+    for i in range(num_food):
+        new_food(i)
+    fitness = []
 
-        move = agents[i].move(pos[i], mass[i], radius[i], agent_input, food_input) * speed
+    for t in range(gen_time):
+        '''
+        num_alive = 0
+        for i in range(num_agents):
+            if alive[i]:
+                num_alive += 1
+        print('num_alive = %d' % num_alive)
+        if num_alive <= num_close_agents:
+            for i in range(num_agents):
+                if alive[i]:
+                    die(i, t)
+            break
+        '''
+        
+        for i in range(num_agents):
+            if not alive[i]:
+                continue
 
-        pos[i][0] = min(max(pos[i][0] + move[0], 0), 1)
-        pos[i][1] = min(max(pos[i][1] + move[1], 0), 1)
+            inp = [pos[i][0], pos[i][1], radius[i]]
+            agent_idx = closest_agents(i)
+            for j in agent_idx:
+                inp += minus(pos[j], pos[i])
+                inp += [radius[j]]
+            if len(agent_idx) < num_close_agents:
+                inp += [0]*(3*(num_close_agents - len(agent_idx)))
 
-        check_eat(i)
-    draw(win)
+            food_idx = closest_food(i)
+            for j in food_idx:
+                inp += minus(food[j], pos[i])
 
+            move = agents[i].move(inp)
+
+            norm = dist(move)
+            #if i == 0:
+            #    print("Agent 0's move: (%.3f, %.3f)" % (move[0], move[1]))
+            #print(norm)
+            if norm > 1:
+                move /= norm
+                set_mass(i, mass[i]/norm)
+            move *= max_speed
+
+            pos[i][0] = min(max(pos[i][0] + move[0], 0), 1)
+            pos[i][1] = min(max(pos[i][1] + move[1], 0), 1)
+
+            if pos[i][0] == 0 or pos[i][0] == 1 or pos[i][1] == 0 or pos[i][1] == 1:
+                set_mass(i, mass[i] / 2)
+            if mass[i] < 1:
+                die(i, t)
+            else: # still alive
+                check_eat(i, t)
+
+        draw(win)
+
+    for i in range(num_agents):
+        if alive[i]:
+            die(i, 2*gen_time)
+    
+    assert(len(fitness) == num_agents)
+    fitness = sorted(fitness)
+    fitness.reverse()
+
+    best = []
+    for i in range(num_survive):
+        best.append(agents[fitness[i][1]].params.copy())
+
+    avg_fitness = 0
+    for i in range(num_agents):
+        avg_fitness += fitness[i][0]
+    avg_fitness /= num_agents
+
+    avg_top = 0
+    for i in range(num_survive):
+        avg_top += fitness[i][0]
+    avg_top /= num_survive
+    print('Average fitness = %.3f, top %d average = %.3f' % (avg_fitness, num_survive, avg_top))
+    
+
+best.append(np.zeros(param_size))
+for i in range(num_generations):
+    print('Starting Generation %d' % i)
+    run_generation()
