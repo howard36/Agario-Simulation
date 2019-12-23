@@ -8,20 +8,20 @@ from graphics import *
 random.seed()
 num_agents = 50
 num_food = 200
-num_close_agents = 5
-num_close_food = 5
+num_close_agents = 3
+num_close_food = 0
 num_survive = 10
 starting_mass = 5
 mass_decay = 0.99
 max_speed = 1/100
 
-gen_time = 500
+gen_time = 200
 num_generations = 1000000
 
 
-sigma = 100
+sigma = 50
 input_size = 3 + 3*num_close_agents + 2*num_close_food
-hidden_size = 20
+hidden_size = 10
 param_size = (input_size+1)*hidden_size + (hidden_size+1)*2
 
 print('Parameter Size: %d' % param_size)
@@ -108,9 +108,9 @@ def new_agent(i):
     #print(L2(step), L2(params))
 
 def eat(i, j, t):
+    #print('%d ate %d at time %d' % (i, j, t))
     assert(alive[i])
     assert(alive[j])
-    #print('%d ate %d' % (i, j))
     set_mass(i, mass[i] + mass[j])
     die(j, t) 
     check_eat(i, t)
@@ -134,6 +134,7 @@ def check_eat(i, t):
             eat(i, j, t)
         elif mass[j] > mass[i] and dist2(pos[i], pos[j]) < radius[j]:
             eat(j, i, t)
+            break
 
 agents = [None]*num_agents
 pos = [None]*num_agents
@@ -162,19 +163,6 @@ def run_generation():
     fitness = []
 
     for t in range(gen_time):
-        '''
-        num_alive = 0
-        for i in range(num_agents):
-            if alive[i]:
-                num_alive += 1
-        print('num_alive = %d' % num_alive)
-        if num_alive <= num_close_agents:
-            for i in range(num_agents):
-                if alive[i]:
-                    die(i, t)
-            break
-        '''
-        
         for i in range(num_agents):
             if not alive[i]:
                 continue
