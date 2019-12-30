@@ -4,6 +4,9 @@ import math
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
+def tanh(x):
+    return (np.exp(x) - np.exp(-x)) / (np.exp(x) + np.exp(-x))
+
 class Agent:
     def __init__(self, input_size, hidden_size, params):
         self.input_size = input_size
@@ -31,11 +34,12 @@ class Agent:
             print('input = ', end='')
             print(x)
         x = np.matmul(self.w1, x)
-        x = sigmoid(x)
+        x = tanh(x)
         x = np.append(x, [1])
         if show:
             print('hidden = ', end='')
             print(x)
         x = np.matmul(self.w2, x)
+        x = tanh(x)
         return x
 

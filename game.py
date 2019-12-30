@@ -19,7 +19,7 @@ gen_time = 200
 num_generations = 1000000
 
 
-sigma = 50
+sigma = 20
 input_size = 3 + 3*num_close_agents + 2*num_close_food
 hidden_size = 10
 param_size = (input_size+1)*hidden_size + (hidden_size+1)*2
@@ -121,6 +121,15 @@ def die(i, t):
     #print(fitness)
     fitness.append((t + mass[i], i))
 
+def check_eaten(i, t):
+    for j in range(num_agents):
+        if j == i or not alive[j]:
+            continue
+        if mass[j] > mass[i] and dist2(pos[i], pos[j]) < radius[j]:
+            eat(j, i, t)
+            return True
+    return False
+
 def check_eat(i, t):
     assert(alive[i])
     for j in range(num_food):
@@ -132,9 +141,6 @@ def check_eat(i, t):
             continue
         if mass[i] > mass[j] and dist2(pos[i], pos[j]) < radius[i]:
             eat(i, j, t)
-        elif mass[j] > mass[i] and dist2(pos[i], pos[j]) < radius[j]:
-            eat(j, i, t)
-            break
 
 agents = [None]*num_agents
 pos = [None]*num_agents
@@ -161,17 +167,25 @@ def run_generation():
     for i in range(num_food):
         new_food(i)
     fitness = []
+    maxlog = -100
+    minlog = 100
+    maxlogd = -100
+    minlogd = 100
 
     for t in range(gen_time):
         for i in range(num_agents):
             if not alive[i]:
                 continue
 
-            inp = [pos[i][0], pos[i][1], radius[i]]
+            inp = [2*pos[i][0]-1, 2*pos[i][1]-1, np.log10(mass[i]/starting_mass)]
+            maxlog = max(maxlog, np.log10(mass[i]/starting_mass))
+            minlog = min(minlog, np.log10(mass[i]/starting_mass))
             agent_idx = closest_agents(i)
             for j in agent_idx:
                 inp += minus(pos[j], pos[i])
-                inp += [radius[j]]
+                inp.append(np.log10(mass[j]/mass[i]))
+                maxlogd = max(maxlogd, np.log10(mass[j]/mass[i]))
+                minlogd = min(minlogd, np.log10(mass[j]/mass[i]))
             if len(agent_idx) < num_close_agents:
                 inp += [0]*(3*(num_close_agents - len(agent_idx)))
 
@@ -181,17 +195,20 @@ def run_generation():
 
             move = agents[i].move(inp)
 
-            norm = dist(move)
+            #norm = dist(move)
             #if i == 0:
             #    print("Agent 0's move: (%.3f, %.3f)" % (move[0], move[1]))
             #print(norm)
-            if norm > 1:
-                move /= norm
-                set_mass(i, mass[i]/norm)
+            #if norm > 1:
+            #    move /= norm
+            #    set_mass(i, mass[i]/norm)
             move *= max_speed
 
             pos[i][0] = min(max(pos[i][0] + move[0], 0), 1)
             pos[i][1] = min(max(pos[i][1] + move[1], 0), 1)
+
+            if check_eaten(i, t):
+                continue
 
             if pos[i][0] == 0 or pos[i][0] == 1 or pos[i][1] == 0 or pos[i][1] == 1:
                 set_mass(i, mass[i] / 2)
@@ -224,6 +241,7 @@ def run_generation():
         avg_top += fitness[i][0]
     avg_top /= num_survive
     print('Average fitness = %.3f, top %d average = %.3f' % (avg_fitness, num_survive, avg_top))
+    print('maxl = %.2f, minl = %.2f, maxld = %.2f, minld = %.2f' % (maxlog, minlog, maxlogd, minlogd))
     
 
 best.append(np.zeros(param_size))
